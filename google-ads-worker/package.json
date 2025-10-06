@@ -1,0 +1,13 @@
+{
+  "name": "google-ads-worker",
+  "version": "1.0.0",
+  "description": "Processes GCLID and uploads conversions to Google Ads.",
+  "main": "index.js",
+  "scripts": {
+    "start": "functions-framework --target=googleAdsWorker --port=8082"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^4.0.0",
+    "dotenv": "^17.2.3"
+  }
+}

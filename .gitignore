@@ -1,0 +1,9 @@
+# Node dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# macOS folder attributes
+.DS_Store
+commands.txt

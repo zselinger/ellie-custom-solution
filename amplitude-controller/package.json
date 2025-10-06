@@ -1,0 +1,15 @@
+{
+  "name": "amplitude-controller",
+  "version": "1.0.0",
+  "description": "Receives events from Amplitude, queries BQ, and pushes to Pub/Sub.",
+  "main": "index.js",
+  "scripts": {
+    "start": "functions-framework --target=amplitudeController --port=8081"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^8.1.1",
+    "@google-cloud/functions-framework": "^4.0.0",
+    "@google-cloud/pubsub": "^5.2.0",
+    "dotenv": "^17.2.3"
+  }
+}
