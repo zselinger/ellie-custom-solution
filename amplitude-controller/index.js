@@ -3,8 +3,15 @@ const functions = require("@google-cloud/functions-framework");
 const { BigQuery } = require("@google-cloud/bigquery");
 const { PubSub } = require("@google-cloud/pubsub");
 
-const bigquery = new BigQuery();
-const pubsub = new PubSub();
+// When using emulators, we must explicitly specify the project ID
+// that the emulators are configured to use.
+const clientOptions = {};
+if (process.env.PUBSUB_EMULATOR_HOST || process.env.BIGQUERY_EMULATOR_HOST) {
+  clientOptions.projectId = "local-dev-project";
+}
+
+const bigquery = new BigQuery(clientOptions);
+const pubsub = new PubSub(clientOptions);
 
 const TOPIC_NAME = process.env.PUBSUB_TOPIC_ID || "process-gclid";
 
@@ -20,6 +27,7 @@ functions.http("amplitudeController", async (req, res) => {
     return res.status(405).send("Method Not Allowed");
   }
 
+  console.log("CONGIGURED PORT", process.env.PUBSUB_EMULATOR_HOST);
   console.log("Received request from Amplitude:");
   console.log(JSON.stringify(req.body, null, 2));
 
