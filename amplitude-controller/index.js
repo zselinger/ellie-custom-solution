@@ -2,6 +2,7 @@ require("dotenv").config({ path: "../.env" });
 const functions = require("@google-cloud/functions-framework");
 const { BigQuery } = require("@google-cloud/bigquery");
 const { PubSub } = require("@google-cloud/pubsub");
+const { getAccountFromGclid } = require("./googleAdsClient");
 
 const projectId = process.env.GCP_PROJECT_ID;
 
@@ -25,46 +26,56 @@ functions.http("amplitudeController", async (req, res) => {
   console.log("Received request from Amplitude:");
   console.log(JSON.stringify(req.body, null, 2));
 
-  const { gclid, accountId } = req.body;
+  const { gclid } = req.body;
+
+  if (!gclid) {
+    return res.status(400).send("Missing gclid in request body");
+  }
 
   try {
-    const datasetId = process.env.BIGQUERY_DATASET;
-    const tableId = process.env.BIGQUERY_TABLE;
+    // 1. Look up account ID from gclid
+    //const accountId = await getAccountFromGclid(gclid);
+    //if (!accountId) {
+    //  console.log(`No account found for gclid: ${gclid}`);
+    //  return res.status(404).send(`No account found for gclid: ${gclid}`);
+    //}
+    //console.log(`Found account ${accountId} for gclid ${gclid}`);
 
-    if (!projectId || !datasetId || !tableId) {
-      throw new Error(
-        "Missing required environment variables for BigQuery connection."
-      );
-    }
-    // 1. Query BigQuery for settings
-    console.log(`Querying BigQuery for account: ${accountId}`);
-    const query = `SELECT * FROM \`${projectId}.${datasetId}.${tableId}\` WHERE account_id = @accountId LIMIT 1`;
-    const options = { query: query, params: { accountId: accountId } };
-    const [rows] = await bigquery.query(options);
+    //const datasetId = process.env.BIGQUERY_DATASET;
+    //const tableId = process.env.BIGQUERY_TABLE;
 
-    if (rows.length === 0) {
-      console.log(`No settings found for account: ${accountId}`);
-      res.status(404).send(`No settings found for account: ${accountId}`);
-      return;
-    }
-    const settings = rows[0];
-    console.log("BQ Settings:", settings);
+    //if (!projectId || !datasetId || !tableId) {
+    //  throw new Error(
+    //    "Missing required environment variables for BigQuery connection."
+    //  );
+    //}
+    //// 2. Query BigQuery for settings
+    //console.log(`Querying BigQuery for account: ${accountId}`);
+    //const query = `SELECT * FROM \`${projectId}.${datasetId}.${tableId}\` WHERE customer_id = @accountId LIMIT 1`;
+    //const options = { query: query, params: { accountId: accountId } };
+    //const [rows] = await bigquery.query(options);
 
-    // 2. Prepare message for Pub/Sub
-    //const messagePayload = {
-    //  gclid: req.body.gclid || "test-gclid",
-    //  settings: settings,
-    //};
-    //const dataBuffer = Buffer.from(JSON.stringify(messagePayload));
+    //if (rows.length === 0) {
+    //  console.log(`No settings found for account: ${accountId}`);
+    //  res.status(404).send(`No settings found for account: ${accountId}`);
+    //  return;
+    //}
+    //const settings = rows[0];
+    //console.log("BQ Settings:", settings);
 
-    //// 3. Publish message to Pub/Sub
-    //const messageId = await pubsub
-    //  .topic(TOPIC_NAME)
-    //  .publishMessage({ data: dataBuffer });
-    //console.log(`Message ${messageId} published to topic ${TOPIC_NAME}.`);
+    // 3. Prepare message for Pub/Sub
+    const messagePayload = {
+      gclid: req.body.gclid || "test-gclid",
+    };
+    const dataBuffer = Buffer.from(JSON.stringify(messagePayload));
 
-    //res.status(200).send(`Successfully published message ID: ${messageId}`);
-    res.status(200).send(`Successfully processed request`);
+    // 4. Publish message to Pub/Sub
+    const messageId = await pubsub
+      .topic(TOPIC_NAME)
+      .publishMessage({ data: dataBuffer });
+    console.log(`Message ${messageId} published to topic ${TOPIC_NAME}.`);
+
+    res.status(200).send(`Successfully published message ID: ${messageId}`);
   } catch (error) {
     console.error("Error processing request:", error);
     res.status(500).send("Internal Server Error");
