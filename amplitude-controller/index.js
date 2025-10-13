@@ -2,7 +2,6 @@ require("dotenv").config({ path: "../.env" });
 const functions = require("@google-cloud/functions-framework");
 const { BigQuery } = require("@google-cloud/bigquery");
 const { PubSub } = require("@google-cloud/pubsub");
-const { getAccountFromGclid } = require("./googleAdsClient");
 
 const projectId = process.env.GCP_PROJECT_ID;
 
@@ -26,34 +25,27 @@ functions.http("amplitudeController", async (req, res) => {
   console.log("Received request from Amplitude:");
   console.log(JSON.stringify(req.body, null, 2));
 
-  const { gclid } = req.body;
+  const { event_type, event_properties } = req.body;
 
-  if (!gclid) {
+  if (!event_properties.gclid) {
     return res.status(400).send("Missing gclid in request body");
   }
 
   try {
-    // 1. Look up account ID from gclid
-    //const accountId = await getAccountFromGclid(gclid);
-    //if (!accountId) {
-    //  console.log(`No account found for gclid: ${gclid}`);
-    //  return res.status(404).send(`No account found for gclid: ${gclid}`);
-    //}
-    //console.log(`Found account ${accountId} for gclid ${gclid}`);
+    const datasetId = process.env.BIGQUERY_DATASET;
+    const tableId = process.env.BIGQUERY_TABLE;
 
-    //const datasetId = process.env.BIGQUERY_DATASET;
-    //const tableId = process.env.BIGQUERY_TABLE;
-
-    //if (!projectId || !datasetId || !tableId) {
-    //  throw new Error(
-    //    "Missing required environment variables for BigQuery connection."
-    //  );
-    //}
-    //// 2. Query BigQuery for settings
-    //console.log(`Querying BigQuery for account: ${accountId}`);
-    //const query = `SELECT * FROM \`${projectId}.${datasetId}.${tableId}\` WHERE customer_id = @accountId LIMIT 1`;
-    //const options = { query: query, params: { accountId: accountId } };
-    //const [rows] = await bigquery.query(options);
+    if (!projectId || !datasetId || !tableId) {
+      throw new Error(
+        "Missing required environment variables for BigQuery connection."
+      );
+    }
+    // 2. Query BigQuery for settings
+    console.log(`Querying BigQuery for all settings for event: ${event_type}`);
+    const query = `SELECT * FROM \`${projectId}.${datasetId}.${tableId}\` WHERE REGEXP_CONTAINS(events, CONCAT('\\\\b', @eventType, '\\\\b'))`;
+    const options = { query, params: { eventType: event_type } };
+    const [rows] = await bigquery.query(options);
+    console.log("BQ Settings:", rows);
 
     //if (rows.length === 0) {
     //  console.log(`No settings found for account: ${accountId}`);
