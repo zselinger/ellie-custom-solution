@@ -47,19 +47,16 @@ functions.http("amplitudeController", async (req, res) => {
     const [rows] = await bigquery.query(options);
     console.log("BQ Settings:", rows);
 
-    //if (rows.length === 0) {
-    //  console.log(`No settings found for account: ${accountId}`);
-    //  res.status(404).send(`No settings found for account: ${accountId}`);
-    //  return;
-    //}
-    //const settings = rows[0];
-    //console.log("BQ Settings:", settings);
+    if (rows.length === 0) {
+      console.log(`No settings found for event: ${event_type}`);
+      res.status(200).send(`No settings found for event: ${event_type}`);
+      return;
+    }
 
     // 3. Prepare message for Pub/Sub
-    const messagePayload = {
-      gclid: req.body.gclid || "test-gclid",
-    };
-    const dataBuffer = Buffer.from(JSON.stringify(messagePayload));
+    const dataBuffer = Buffer.from(
+      JSON.stringify({ gclid: event_properties.gclid, conversion_action: rows })
+    );
 
     // 4. Publish message to Pub/Sub
     const messageId = await pubsub
@@ -69,7 +66,7 @@ functions.http("amplitudeController", async (req, res) => {
 
     res.status(200).send(`Successfully published message ID: ${messageId}`);
   } catch (error) {
-    console.error("Error processing request:", error);
+    console.error("ERROR:", error);
     res.status(500).send("Internal Server Error");
   }
 });
