@@ -55,7 +55,10 @@ functions.http("amplitudeController", async (req, res) => {
 
     // 3. Prepare message for Pub/Sub
     const dataBuffer = Buffer.from(
-      JSON.stringify({ gclid: event_properties.gclid, conversion_action: rows })
+      JSON.stringify({
+        gclid: event_properties.gclid,
+        conversion_actions: rows,
+      })
     );
 
     // 4. Publish message to Pub/Sub
