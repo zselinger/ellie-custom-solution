@@ -1,8 +1,6 @@
 require("dotenv").config({ path: "../.env" });
 const functions = require("@google-cloud/functions-framework");
-const {
-  uploadClickConversion,
-} = require("../amplitude-controller/googleAdsClient");
+const { uploadClickConversion } = require("./googleAdsClient");
 
 /**
  * Background Cloud Function to be triggered by Pub/Sub.
