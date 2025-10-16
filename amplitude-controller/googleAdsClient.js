@@ -73,7 +73,6 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
         conversionDateTime,
       };
     });
-    console.log("Conversions:", conversions);
 
     const payload = {
       conversions,
@@ -95,8 +94,6 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
     );
 
     const { partialFailureError, results } = response.data;
-    console.log("Partial failure error:", partialFailureError);
-    console.log("Results:", results);
 
     // If there's a partial failure error, it means the gclid probably didn't match the account.
     if (partialFailureError) {

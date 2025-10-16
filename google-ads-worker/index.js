@@ -13,47 +13,47 @@ const {
  */
 functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
   // The Pub/Sub message is passed as the cloudEvent.data.message property.
-  //const base64data = cloudEvent.data.message.data;
-  //const messageData = base64data
-  //  ? JSON.parse(Buffer.from(base64data, "base64").toString())
-  //  : {};
+  const base64data = cloudEvent.data.message.data;
+  const messageData = base64data
+    ? JSON.parse(Buffer.from(base64data, "base64").toString())
+    : {};
 
-  let messageData = {
-    gclid:
-      "Cj0KCQjw6bfHBhDNARIsAIGsqLg25SvbEHHw5ZhMJNqRuWYz8shMN5DaapJa0UOJvCwXVzNEG7QL2v4aAt2eEALw_wcB",
-    conversion_actions: [
-      {
-        timestamp: { value: "2025-10-15T01:22:04.358Z" },
-        customer_id: "185-069-2321",
-        conversion_action_id: "5464",
-        events: "Irvin Yalom",
-      },
-      {
-        timestamp: { value: "2025-10-15T01:22:04.358Z" },
-        customer_id: "372-699-8268",
-        conversion_action_id: "7217059813",
-        events: "Sigmund Freud, Marsh Linehan, Irvin Yalom",
-      },
-      {
-        timestamp: { value: "2025-10-15T01:22:04.358Z" },
-        customer_id: "628-809-9044",
-        conversion_action_id: "4645464",
-        events: "Jean Piaget, Irvin Yalom",
-      },
-      {
-        timestamp: { value: "2025-10-15T01:22:04.358Z" },
-        customer_id: "571-852-3592",
-        conversion_action_id: "114465545",
-        events: "Virginia Satir, Irvin Yalom",
-      },
-      {
-        timestamp: { value: "2025-10-15T01:22:04.358Z" },
-        customer_id: "571-852-3592",
-        conversion_action_id: "474644",
-        events: "Irvin Yalom",
-      },
-    ],
-  };
+  //let messageData = {
+  //  gclid:
+  //    "Cj0KCQjw6bfHBhDNARIsAIGsqLg25SvbEHHw5ZhMJNqRuWYz8shMN5DaapJa0UOJvCwXVzNEG7QL2v4aAt2eEALw_wcB",
+  //  conversion_actions: [
+  //    {
+  //      timestamp: { value: "2025-10-15T01:22:04.358Z" },
+  //      customer_id: "185-069-2321",
+  //      conversion_action_id: "5464",
+  //      events: "Irvin Yalom",
+  //    },
+  //    {
+  //      timestamp: { value: "2025-10-15T01:22:04.358Z" },
+  //      customer_id: "372-699-8268",
+  //      conversion_action_id: "7217059813",
+  //      events: "Sigmund Freud, Marsh Linehan, Irvin Yalom",
+  //    },
+  //    {
+  //      timestamp: { value: "2025-10-15T01:22:04.358Z" },
+  //      customer_id: "628-809-9044",
+  //      conversion_action_id: "4645464",
+  //      events: "Jean Piaget, Irvin Yalom",
+  //    },
+  //    {
+  //      timestamp: { value: "2025-10-15T01:22:04.358Z" },
+  //      customer_id: "571-852-3592",
+  //      conversion_action_id: "114465545",
+  //      events: "Virginia Satir, Irvin Yalom",
+  //    },
+  //    {
+  //      timestamp: { value: "2025-10-15T01:22:04.358Z" },
+  //      customer_id: "571-852-3592",
+  //      conversion_action_id: "474644",
+  //      events: "Irvin Yalom",
+  //    },
+  //  ],
+  //};
 
   console.log("Received message from Pub/Sub:");
   console.log(JSON.stringify(messageData, null, 2));
@@ -63,35 +63,45 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
     return;
   }
 
-  const customers = new Set(
-    messageData.conversion_actions.map(
-      (conversion_action) => conversion_action.customer_id
-    )
+  // 1. Group conversion actions by customer_id for efficiency.
+  const customerConversionsMap = new Map();
+  for (const action of messageData.conversion_actions) {
+    if (!customerConversionsMap.has(action.customer_id)) {
+      customerConversionsMap.set(action.customer_id, []);
+    }
+    customerConversionsMap.get(action.customer_id).push(action);
+  }
+
+  console.log(
+    "Processing conversions for customers:",
+    Array.from(customerConversionsMap.keys())
   );
 
-  console.log("Customers:", Array.from(customers));
-
-  let anyUploadSucceeded = false;
-  for (const customerId of customers) {
-    const customerConversionActions = messageData.conversion_actions.filter(
-      (action) => action.customer_id === customerId
+  // 2. Create an array of upload promises to be executed in parallel.
+  const uploadPromises = [];
+  for (const [customerId, actions] of customerConversionsMap.entries()) {
+    uploadPromises.push(
+      uploadClickConversion(customerId, actions, messageData.gclid)
     );
-    try {
-      await uploadClickConversion(
-        customerId,
-        customerConversionActions,
-        messageData.gclid
-      );
-      // Mark as success if the API accepts the call for this customer.
-      // We don't stop, in case other conversions need to be processed for other accounts.
-      anyUploadSucceeded = true;
-    } catch (error) {
+  }
+
+  // 3. Execute all uploads concurrently and wait for them to settle.
+  const results = await Promise.allSettled(uploadPromises);
+
+  // 4. Check if at least one upload was successful.
+  const anyUploadSucceeded = results.some(
+    (result) => result.status === "fulfilled"
+  );
+
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const customerId = Array.from(customerConversionsMap.keys())[index];
       console.error(
         `Failed to process conversions for customer ${customerId}:`,
-        error.message
+        result.reason.message
       );
     }
-  }
+  });
 
   if (!anyUploadSucceeded) {
     throw new Error(
