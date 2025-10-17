@@ -18,16 +18,33 @@ const TOPIC_NAME = process.env.PUBSUB_TOPIC_ID || "process-gclid";
  * @param {Object} res Cloud Function response context.
  */
 functions.http("amplitudeController", async (req, res) => {
+  console.log(
+    JSON.stringify({
+      message: "amplitude-controller execution started.",
+      severity: "INFO",
+    })
+  );
+
   if (req.method !== "POST") {
+    console.error(
+      JSON.stringify({
+        message: "Method Not Allowed",
+        severity: "ERROR",
+      })
+    );
     return res.status(405).send("Method Not Allowed");
   }
 
-  console.log("Received request from Amplitude:");
-  console.log(JSON.stringify(req.body, null, 2));
-
   const { event_type, event_properties } = req.body;
 
-  if (!event_properties.gclid) {
+  if (!event_properties || !event_properties.gclid) {
+    console.error(
+      JSON.stringify({
+        message: "Missing gclid in request body",
+        severity: "ERROR",
+        body: req.body,
+      })
+    );
     return res.status(400).send("Missing gclid in request body");
   }
 
@@ -41,35 +58,55 @@ functions.http("amplitudeController", async (req, res) => {
       );
     }
     // 2. Query BigQuery for settings
-    console.log(`Querying BigQuery for all settings for event: ${event_type}`);
     const query = `SELECT * FROM \`${projectId}.${datasetId}.${tableId}\` WHERE REGEXP_CONTAINS(events, CONCAT('\\\\b', @eventType, '\\\\b'))`;
     const options = { query, params: { eventType: event_type } };
     const [rows] = await bigquery.query(options);
-    console.log("BQ Settings:", rows);
 
     if (rows.length === 0) {
-      console.log(`No settings found for event: ${event_type}`);
-      res.status(200).send(`No settings found for event: ${event_type}`);
+      const logMessage = `No settings found for event: ${event_type}`;
+      console.log(
+        JSON.stringify({
+          message: logMessage,
+          severity: "INFO",
+          event_type,
+        })
+      );
+      res.status(200).send(logMessage);
       return;
     }
 
     // 3. Prepare message for Pub/Sub
-    const dataBuffer = Buffer.from(
-      JSON.stringify({
-        gclid: event_properties.gclid,
-        conversion_actions: rows,
-      })
-    );
+    const messagePayload = {
+      gclid: event_properties.gclid,
+      conversion_actions: rows,
+    };
+    const dataBuffer = Buffer.from(JSON.stringify(messagePayload));
 
     // 4. Publish message to Pub/Sub
     const messageId = await pubsub
       .topic(TOPIC_NAME)
       .publishMessage({ data: dataBuffer });
-    console.log(`Message ${messageId} published to topic ${TOPIC_NAME}.`);
+
+    console.log(
+      JSON.stringify({
+        message: `Message ${messageId} published to topic ${TOPIC_NAME}.`,
+        severity: "INFO",
+        messageId,
+        topic: TOPIC_NAME,
+        gclid: event_properties.gclid,
+      })
+    );
 
     res.status(200).send(`Successfully published message ID: ${messageId}`);
   } catch (error) {
-    console.error("ERROR:", error);
+    console.error(
+      JSON.stringify({
+        message: "amplitude-controller execution failed.",
+        severity: "ERROR",
+        error: error.message,
+        stack: error.stack,
+      })
+    );
     res.status(500).send("Internal Server Error");
   }
 });
