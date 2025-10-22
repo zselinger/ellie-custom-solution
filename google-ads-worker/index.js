@@ -52,60 +52,40 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
       );
     }
 
-    // 3. Execute all uploads concurrently and wait for them to settle.
-    const results = await Promise.allSettled(uploadPromises);
+    // 3. Execute all uploads concurrently and wait for the first success.
+    await Promise.any(uploadPromises);
 
-    // 4. Check if at least one upload was successful.
-    const anyUploadSucceeded = results.some(
-      (result) => result.status === "fulfilled"
-    );
-
-    const failedUploads = [];
-    results.forEach((result, index) => {
-      if (result.status === "rejected") {
-        const customerId = Array.from(customerConversionsMap.keys())[index];
-        const failure = {
-          customerId,
-          reason: result.reason.message,
-        };
-        failedUploads.push(failure);
-        console.warn(
-          JSON.stringify({
-            message: `Failed to process conversions for customer ${customerId}`,
-            severity: "WARNING",
-            gclid: messageData.gclid,
-            ...failure,
-          })
-        );
-      }
-    });
-
-    if (!anyUploadSucceeded) {
-      throw new Error(
-        "Failed to upload click conversion for GCLID to any of the provided accounts."
-      );
-    }
+    // If Promise.any() resolves, it means at least one upload succeeded.
+    // If all promises reject, Promise.any() will throw an AggregateError,
+    // which will be caught by the main catch block.
 
     console.log(
       JSON.stringify({
-        message: "google-ads-worker execution finished successfully.",
+        message:
+          "google-ads-worker execution finished successfully (at least one upload succeeded).",
         severity: "INFO",
         gclid: messageData.gclid,
-        processedConversions: messageData.conversion_actions.length,
-        successfulUploads: results.filter((r) => r.status === "fulfilled")
-          .length,
-        failedUploads: failedUploads.length,
       })
     );
   } catch (error) {
+    let errorMessage = "google-ads-worker execution failed.";
+    // Check if it's an AggregateError from Promise.any(), which means all uploads failed.
+    if (error instanceof AggregateError) {
+      errorMessage =
+        "All click conversion uploads failed for the provided GCLID.";
+    }
+
     console.error(
       JSON.stringify({
-        message: "google-ads-worker execution failed.",
+        message: errorMessage,
         severity: "ERROR",
         error: error.message,
         stack: error.stack,
+        // Optionally log individual errors if they are useful
+        ...(error.errors && { individualErrors: error.errors }),
       })
     );
+
     // Re-throw the error to ensure the Cloud Function is marked as failed
     throw error;
   }

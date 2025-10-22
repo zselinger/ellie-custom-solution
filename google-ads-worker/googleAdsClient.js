@@ -58,7 +58,7 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
     const url = `${GADS_API_URL}/${customerIdFormatted}:uploadClickConversions`;
 
     const conversions = conversionActions.map((conv) => {
-      const dt = new Date(conv.timestamp.value);
+      const dt = new Date();
       const conversionDateTime = `${dt.getFullYear()}-${String(
         dt.getMonth() + 1
       ).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(
