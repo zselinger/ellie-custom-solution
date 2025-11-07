@@ -78,6 +78,7 @@ functions.http("amplitudeController", async (req, res) => {
     // 3. Prepare message for Pub/Sub
     const messagePayload = {
       gclid: event_properties.gclid,
+      event_type: event_type,
       conversion_actions: rows,
     };
     const dataBuffer = Buffer.from(JSON.stringify(messagePayload));
@@ -94,6 +95,7 @@ functions.http("amplitudeController", async (req, res) => {
         messageId,
         topic: TOPIC_NAME,
         gclid: event_properties.gclid,
+        event_type: event_type,
       })
     );
 
@@ -105,6 +107,7 @@ functions.http("amplitudeController", async (req, res) => {
         severity: "ERROR",
         error: error.message,
         stack: error.stack,
+        event_type: event_type,
       })
     );
     res.status(500).send("Internal Server Error");

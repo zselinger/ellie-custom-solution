@@ -17,6 +17,8 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
     })
   );
 
+  let event_type = "unknown";
+
   try {
     // The Pub/Sub message is passed as the cloudEvent.data.message property.
     const base64data = cloudEvent.data.message.data;
@@ -24,7 +26,10 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
       ? JSON.parse(Buffer.from(base64data, "base64").toString())
       : {};
 
-    if (!messageData.conversion_actions || !messageData.gclid) {
+    const { gclid, conversion_actions } = messageData;
+    event_type = messageData.event_type || "unknown";
+
+    if (!conversion_actions || !gclid) {
       console.error(
         JSON.stringify({
           message: "Invalid message format received.",
@@ -65,6 +70,7 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
           "google-ads-worker execution finished successfully (at least one upload succeeded).",
         severity: "INFO",
         gclid: messageData.gclid,
+        event_type: event_type,
       })
     );
   } catch (error) {
@@ -81,6 +87,7 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
         severity: "ERROR",
         error: error.message,
         stack: error.stack,
+        event_type: event_type,
         // Optionally log individual errors if they are useful
         ...(error.errors && { individualErrors: error.errors }),
       })
