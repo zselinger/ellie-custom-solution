@@ -92,7 +92,15 @@ functions.http("googleAdsWorker", async (req, res) => {
         const customerClicks = customerClicksMap.get(action.customer_id);
         const existingClick = customerClicks.find((c) => c.gclid === gclid);
         if (existingClick) {
-          existingClick.conversion_actions.push(action);
+          // Only add the action if it's not already in the list for this click.
+          const actionExists = existingClick.conversion_actions.some(
+            (existingAction) =>
+              existingAction.conversion_action_id ===
+              action.conversion_action_id
+          );
+          if (!actionExists) {
+            existingClick.conversion_actions.push(action);
+          }
         } else {
           customerClicks.push({ gclid, conversion_actions: [action] });
         }
@@ -108,15 +116,9 @@ functions.http("googleAdsWorker", async (req, res) => {
     // 3. Execute all uploads concurrently.
     await Promise.all(uploadPromises);
 
-    // 4. Acknowledge messages from Pub/Sub.
-    if (ackIds.length > 0) {
-      await subscriberClient.acknowledge(ackIds);
-      console.log(`Acknowledged ${ackIds.length} messages.`);
-    }
-
     console.log(
       JSON.stringify({
-        message: "google-ads-worker execution finished successfully.",
+        message: "google-ads-worker batch processing finished.",
         severity: "INFO",
       })
     );
@@ -124,18 +126,42 @@ functions.http("googleAdsWorker", async (req, res) => {
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "google-ads-worker execution failed.",
+        message: "google-ads-worker execution failed during API call.",
         severity: "ERROR",
         error: error.message,
         stack: error.stack,
       })
     );
-    // Do not acknowledge messages on failure, so they can be retried.
+
     const errorMessage = error.response?.data
       ? JSON.stringify(error.response.data, null, 2)
-      : error.message;
+      : "An error occurred during processing.";
     const errorStatus = error.response?.status || 500;
 
     res.status(errorStatus).send(errorMessage);
+  } finally {
+    // 4. Acknowledge messages from Pub/Sub under all conditions to prevent replays.
+    if (ackIds.length > 0) {
+      try {
+        const formattedSubscription = subscriberClient.subscriptionPath(
+          projectId,
+          subscriptionName
+        );
+        await subscriberClient.acknowledge({
+          subscription: formattedSubscription,
+          ackIds,
+        });
+        console.log(`Acknowledged ${ackIds.length} messages.`);
+      } catch (ackError) {
+        console.error(
+          JSON.stringify({
+            message: "Failed to acknowledge Pub/Sub messages.",
+            severity: "CRITICAL",
+            error: ackError.message,
+            stack: ackError.stack,
+          })
+        );
+      }
+    }
   }
 });
