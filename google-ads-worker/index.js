@@ -1,15 +1,19 @@
-require("dotenv").config({ path: "../.env" });
 const functions = require("@google-cloud/functions-framework");
+const { SubscriberClient } = require("@google-cloud/pubsub").v1;
 const { uploadClickConversion } = require("./googleAdsClient");
 
+const subscriberClient = new SubscriberClient();
+const MAX_MESSAGES = 50;
+
 /**
- * Background Cloud Function to be triggered by Pub/Sub.
- * This function is triggered when a message is published to the topic.
+ * HTTP Cloud Function to be triggered by Cloud Scheduler.
+ * It pulls messages from a Pub/Sub subscription, batches them by customer,
+ * and sends them to the Google Ads API.
  *
- * @param {object} message The Pub/Sub message.
- * @param {object} context The event metadata.
+ * @param {object} req The request object.
+ * @param {object} res The response object.
  */
-functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
+functions.http("googleAdsWorker", async (req, res) => {
   console.log(
     JSON.stringify({
       message: "google-ads-worker execution started.",
@@ -17,83 +21,121 @@ functions.cloudEvent("googleAdsWorker", async (cloudEvent) => {
     })
   );
 
-  let event_type = "unknown";
+  const subscriptionName = process.env.PUBSUB_SUBSCRIPTION_ID;
+  const projectId = process.env.GCP_PROJECT_ID;
+
+  if (!subscriptionName || !projectId) {
+    console.error(
+      JSON.stringify({
+        message:
+          "PUBSUB_SUBSCRIPTION_ID or GCP_PROJECT_ID environment variables not set.",
+        severity: "CRITICAL",
+      })
+    );
+    res.status(500).send("Server configuration error.");
+    return;
+  }
+
+  let ackIds = [];
 
   try {
-    // The Pub/Sub message is passed as the cloudEvent.data.message property.
-    const base64data = cloudEvent.data.message.data;
-    const messageData = base64data
-      ? JSON.parse(Buffer.from(base64data, "base64").toString())
-      : {};
+    const formattedSubscription = subscriberClient.subscriptionPath(
+      projectId,
+      subscriptionName
+    );
+    const request = {
+      subscription: formattedSubscription,
+      maxMessages: MAX_MESSAGES,
+    };
 
-    const { gclid, conversion_actions } = messageData;
-    event_type = messageData.event_type || "unknown";
+    const [response] = await subscriberClient.pull(request);
+    const messages = response.receivedMessages;
 
-    if (!conversion_actions || !gclid) {
-      console.error(
+    if (messages.length === 0) {
+      console.log(
         JSON.stringify({
-          message: "Invalid message format received.",
-          severity: "ERROR",
-          payload: messageData,
+          message: "No messages to process.",
+          severity: "INFO",
         })
       );
+      res.status(200).send("No messages to process.");
       return;
     }
 
-    // 1. Group conversion actions by customer_id for efficiency.
-    const customerConversionsMap = new Map();
-    for (const action of messageData.conversion_actions) {
-      if (!customerConversionsMap.has(action.customer_id)) {
-        customerConversionsMap.set(action.customer_id, []);
+    ackIds = messages.map((message) => message.ackId);
+    console.log(`Received ${messages.length} messages.`);
+
+    // 1. Group clicks by customer_id for efficiency.
+    const customerClicksMap = new Map();
+    for (const message of messages) {
+      const messageData = JSON.parse(message.message.data.toString());
+      const { gclid, conversion_actions } = messageData;
+
+      if (!conversion_actions || !gclid) {
+        console.error(
+          JSON.stringify({
+            message: "Invalid message format received.",
+            severity: "ERROR",
+            payload: messageData,
+          })
+        );
+        // This message will be acked without processing.
+        // Alternatively, you could push it to a dead-letter queue.
+        continue;
       }
-      customerConversionsMap.get(action.customer_id).push(action);
+
+      for (const action of conversion_actions) {
+        if (!customerClicksMap.has(action.customer_id)) {
+          customerClicksMap.set(action.customer_id, []);
+        }
+        // Group all clicks for a customer. A click is a gclid with its actions.
+        const customerClicks = customerClicksMap.get(action.customer_id);
+        const existingClick = customerClicks.find((c) => c.gclid === gclid);
+        if (existingClick) {
+          existingClick.conversion_actions.push(action);
+        } else {
+          customerClicks.push({ gclid, conversion_actions: [action] });
+        }
+      }
     }
 
     // 2. Create an array of upload promises to be executed in parallel.
     const uploadPromises = [];
-    for (const [customerId, actions] of customerConversionsMap.entries()) {
-      uploadPromises.push(
-        uploadClickConversion(customerId, actions, messageData.gclid)
-      );
+    for (const [customerId, clicks] of customerClicksMap.entries()) {
+      uploadPromises.push(uploadClickConversion(customerId, clicks));
     }
 
-    // 3. Execute all uploads concurrently and wait for the first success.
-    await Promise.any(uploadPromises);
+    // 3. Execute all uploads concurrently.
+    await Promise.all(uploadPromises);
 
-    // If Promise.any() resolves, it means at least one upload succeeded.
-    // If all promises reject, Promise.any() will throw an AggregateError,
-    // which will be caught by the main catch block.
+    // 4. Acknowledge messages from Pub/Sub.
+    if (ackIds.length > 0) {
+      await subscriberClient.acknowledge(ackIds);
+      console.log(`Acknowledged ${ackIds.length} messages.`);
+    }
 
     console.log(
       JSON.stringify({
-        message:
-          "google-ads-worker execution finished successfully (at least one upload succeeded).",
+        message: "google-ads-worker execution finished successfully.",
         severity: "INFO",
-        gclid: messageData.gclid,
-        event_type: event_type,
       })
     );
+    res.status(200).send("Batch processing complete.");
   } catch (error) {
-    let errorMessage = "google-ads-worker execution failed.";
-    // Check if it's an AggregateError from Promise.any(), which means all uploads failed.
-    if (error instanceof AggregateError) {
-      errorMessage =
-        "All click conversion uploads failed for the provided GCLID.";
-    }
-
     console.error(
       JSON.stringify({
-        message: errorMessage,
+        message: "google-ads-worker execution failed.",
         severity: "ERROR",
         error: error.message,
         stack: error.stack,
-        event_type: event_type,
-        // Optionally log individual errors if they are useful
-        ...(error.errors && { individualErrors: error.errors }),
       })
     );
+    // Do not acknowledge messages on failure, so they can be retried.
+    const errorMessage = error.response?.data
+      ? JSON.stringify(error.response.data, null, 2)
+      : error.message;
+    const errorStatus = error.response?.status || 500;
 
-    // Re-throw the error to ensure the Cloud Function is marked as failed
-    throw error;
+    res.status(errorStatus).send(errorMessage);
   }
 });

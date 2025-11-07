@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^4.0.0",
+    "@google-cloud/pubsub": "^4.0.0",
     "axios": "^1.12.2",
     "dotenv": "^17.2.3"
   }

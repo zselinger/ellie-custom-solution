@@ -29,17 +29,11 @@ async function refreshAccessToken() {
 /**
  * Uploads a click conversion to Google Ads.
  * @param {string} customerId - The ID of the customer account.
- * @param {Array<object>} conversionActions - The conversion actions.
- * @param {string} gclid - The Google Click ID.
+ * @param {Array<object>} clicks - An array of click objects, each with a gclid and conversionActions.
  * @returns {Promise<object>} The response from the Google Ads API.
  */
-async function uploadClickConversion(customerId, conversionActions, gclid) {
-  if (
-    !customerId ||
-    !gclid ||
-    !conversionActions ||
-    conversionActions.length === 0
-  ) {
+async function uploadClickConversion(customerId, clicks) {
+  if (!customerId || !clicks || clicks.length === 0) {
     throw new Error("Missing required parameters for conversion upload.");
   }
 
@@ -57,26 +51,40 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
     const customerIdFormatted = customerId.replace(/-/g, "");
     const url = `${GADS_API_URL}/${customerIdFormatted}:uploadClickConversions`;
 
-    const conversions = conversionActions.map((conv) => {
-      const dt = new Date();
-      const conversionDateTime = `${dt.getFullYear()}-${String(
-        dt.getMonth() + 1
-      ).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(
-        dt.getHours()
-      ).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}:${String(
-        dt.getSeconds()
-      ).padStart(2, "0")}+00:00`;
+    const conversions = clicks.flatMap((click) => {
+      const { gclid, conversion_actions } = click;
+      if (!gclid || !conversion_actions || conversion_actions.length === 0) {
+        // Skip invalid click objects
+        return [];
+      }
+      return conversion_actions.map((conv) => {
+        const dt = new Date();
+        const conversionDateTime = `${dt.getFullYear()}-${String(
+          dt.getMonth() + 1
+        ).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(
+          dt.getHours()
+        ).padStart(2, "0")}:${String(dt.getMinutes()).padStart(
+          2,
+          "0"
+        )}:${String(dt.getSeconds()).padStart(2, "0")}+00:00`;
 
-      return {
-        gclid,
-        conversionAction: `customers/${customerIdFormatted}/conversionActions/${conv.conversion_action_id}`,
-        conversionDateTime,
-      };
+        return {
+          gclid,
+          conversionAction: `customers/${customerIdFormatted}/conversionActions/${conv.conversion_action_id}`,
+          conversionDateTime,
+        };
+      });
     });
+
+    if (conversions.length === 0) {
+      console.log(`No valid conversions to upload for customer ${customerId}.`);
+      return;
+    }
 
     const payload = {
       conversions,
       partialFailure: true,
+      validateOnly: false, // TODO: Remove this after testing
     };
 
     const response = await axios.post(url, payload, {
@@ -95,9 +103,10 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
 
     const { partialFailureError, results } = response.data;
 
-    // If there's a partial failure error, it means the gclid probably didn't match the account.
+    // If there's a partial failure error, log it as a warning but do not throw.
+    // This is an expected outcome when some GCLIDs are invalid for a customer account.
     if (partialFailureError) {
-      throw new Error(
+      console.warn(
         `Partial failure for customer ${customerId}: ${JSON.stringify(
           partialFailureError
         )}`
@@ -105,15 +114,17 @@ async function uploadClickConversion(customerId, conversionActions, gclid) {
     }
 
     // A successful response for a valid gclid should contain results.
+    // If no results, it means no conversions were successfully processed.
     if (!results || results.length === 0) {
-      throw new Error(
-        `No conversions uploaded for customer ${customerId}. GCLID may not belong to this account.`
+      console.log(
+        `No conversions were successfully uploaded for customer ${customerId}. This may be expected.`
+      );
+    } else {
+      console.log(
+        `Successfully uploaded ${results.length} click conversion(s) for customer ${customerId}.`
       );
     }
 
-    console.log(
-      `Successfully uploaded ${results.length} click conversion(s) for customer ${customerId}.`
-    );
     return response.data;
   } catch (error) {
     console.error(
