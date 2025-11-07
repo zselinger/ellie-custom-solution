@@ -113,15 +113,17 @@ async function uploadClickConversion(customerId, clicks) {
       );
     }
 
-    // A successful response for a valid gclid should contain results.
-    // If no results, it means no conversions were successfully processed.
-    if (!results || results.length === 0) {
+    const successfulConversions = results
+      ? results.filter((result) => Object.keys(result).length > 0)
+      : [];
+
+    if (successfulConversions.length > 0) {
       console.log(
-        `No conversions were successfully uploaded for customer ${customerId}. This may be expected.`
+        `Successfully uploaded ${successfulConversions.length} click conversion(s) for customer ${customerId}.`
       );
     } else {
       console.log(
-        `Successfully uploaded ${results.length} click conversion(s) for customer ${customerId}.`
+        `No conversions were successfully uploaded for customer ${customerId}. This may be expected.`
       );
     }
 
