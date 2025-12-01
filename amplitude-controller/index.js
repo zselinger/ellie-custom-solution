@@ -35,12 +35,16 @@ functions.http("amplitudeController", async (req, res) => {
     return res.status(405).send("Method Not Allowed");
   }
 
-  const { event_type, event_properties } = req.body;
+  const { event_type, event_properties, user_properties } = req.body;
 
-  if (!event_properties || !event_properties.gclid) {
+  // Check for gclid in both event_properties and user_properties
+  const gclid = event_properties?.gclid || user_properties?.gclid;
+
+  if (!gclid) {
     console.error(
       JSON.stringify({
-        message: "Missing gclid in request body",
+        message:
+          "Missing gclid in request body (checked both event_properties and user_properties)",
         severity: "ERROR",
         body: req.body,
       })
@@ -77,7 +81,7 @@ functions.http("amplitudeController", async (req, res) => {
 
     // 3. Prepare message for Pub/Sub
     const messagePayload = {
-      gclid: event_properties.gclid,
+      gclid: gclid,
       event_type: event_type,
       conversion_actions: rows,
     };
@@ -94,7 +98,7 @@ functions.http("amplitudeController", async (req, res) => {
         severity: "INFO",
         messageId,
         topic: TOPIC_NAME,
-        gclid: event_properties.gclid,
+        gclid: gclid,
         event_type: event_type,
       })
     );
