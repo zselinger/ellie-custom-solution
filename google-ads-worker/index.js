@@ -18,6 +18,7 @@ functions.http("googleAdsWorker", async (req, res) => {
     JSON.stringify({
       message: "google-ads-worker execution started.",
       severity: "INFO",
+      payload: req.body,
     })
   );
 
