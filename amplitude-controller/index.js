@@ -22,7 +22,7 @@ functions.http('amplitudeController', async (req, res) => {
     JSON.stringify({
       message: 'amplitude-controller execution started.',
       severity: 'INFO',
-    })
+    }),
   );
 
   if (req.method !== 'POST') {
@@ -30,7 +30,7 @@ functions.http('amplitudeController', async (req, res) => {
       JSON.stringify({
         message: 'Method Not Allowed',
         severity: 'ERROR',
-      })
+      }),
     );
     return res.status(405).send('Method Not Allowed');
   }
@@ -47,7 +47,7 @@ functions.http('amplitudeController', async (req, res) => {
           'Missing gclid in request body (checked both event_properties and user_properties)',
         severity: 'ERROR',
         body: req.body,
-      })
+      }),
     );
     return res.status(400).send('Missing gclid in request body');
   }
@@ -58,7 +58,7 @@ functions.http('amplitudeController', async (req, res) => {
 
     if (!projectId || !datasetId || !tableId) {
       throw new Error(
-        'Missing required environment variables for BigQuery connection.'
+        'Missing required environment variables for BigQuery connection.',
       );
     }
     // 2. Query BigQuery for settings
@@ -73,7 +73,7 @@ functions.http('amplitudeController', async (req, res) => {
           message: logMessage,
           severity: 'INFO',
           event_type,
-        })
+        }),
       );
       res.status(200).send(logMessage);
       return;
@@ -100,7 +100,7 @@ functions.http('amplitudeController', async (req, res) => {
         topic: TOPIC_NAME,
         gclid: gclid,
         event_type: event_type,
-      })
+      }),
     );
 
     res.status(200).send(`Successfully published message ID: ${messageId}`);
@@ -112,7 +112,7 @@ functions.http('amplitudeController', async (req, res) => {
         error: error.message,
         stack: error.stack,
         event_type: event_type,
-      })
+      }),
     );
     res.status(500).send('Internal Server Error');
   }

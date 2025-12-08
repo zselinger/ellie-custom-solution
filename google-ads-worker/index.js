@@ -19,7 +19,7 @@ functions.http('googleAdsWorker', async (req, res) => {
       message: 'google-ads-worker execution started.',
       severity: 'INFO',
       payload: req.body,
-    })
+    }),
   );
 
   const subscriptionName = process.env.PUBSUB_SUBSCRIPTION_ID;
@@ -31,7 +31,7 @@ functions.http('googleAdsWorker', async (req, res) => {
         message:
           'PUBSUB_SUBSCRIPTION_ID or GCP_PROJECT_ID environment variables not set.',
         severity: 'CRITICAL',
-      })
+      }),
     );
     res.status(500).send('Server configuration error.');
     return;
@@ -42,7 +42,7 @@ functions.http('googleAdsWorker', async (req, res) => {
   try {
     const formattedSubscription = subscriberClient.subscriptionPath(
       projectId,
-      subscriptionName
+      subscriptionName,
     );
     const request = {
       subscription: formattedSubscription,
@@ -57,7 +57,7 @@ functions.http('googleAdsWorker', async (req, res) => {
         JSON.stringify({
           message: 'No messages to process.',
           severity: 'INFO',
-        })
+        }),
       );
       res.status(200).send('No messages to process.');
       return;
@@ -78,7 +78,7 @@ functions.http('googleAdsWorker', async (req, res) => {
             message: 'Invalid message format received.',
             severity: 'ERROR',
             payload: messageData,
-          })
+          }),
         );
         // This message will be acked without processing.
         // Alternatively, you could push it to a dead-letter queue.
@@ -97,7 +97,7 @@ functions.http('googleAdsWorker', async (req, res) => {
           const actionExists = existingClick.conversion_actions.some(
             (existingAction) =>
               existingAction.conversion_action_id ===
-              action.conversion_action_id
+              action.conversion_action_id,
           );
           if (!actionExists) {
             existingClick.conversion_actions.push(action);
@@ -121,7 +121,7 @@ functions.http('googleAdsWorker', async (req, res) => {
       JSON.stringify({
         message: 'google-ads-worker batch processing finished.',
         severity: 'INFO',
-      })
+      }),
     );
     res.status(200).send('Batch processing complete.');
   } catch (error) {
@@ -131,7 +131,7 @@ functions.http('googleAdsWorker', async (req, res) => {
         severity: 'ERROR',
         error: error.message,
         stack: error.stack,
-      })
+      }),
     );
 
     const errorMessage = error.response?.data
@@ -146,7 +146,7 @@ functions.http('googleAdsWorker', async (req, res) => {
       try {
         const formattedSubscription = subscriberClient.subscriptionPath(
           projectId,
-          subscriptionName
+          subscriptionName,
         );
         await subscriberClient.acknowledge({
           subscription: formattedSubscription,
@@ -160,7 +160,7 @@ functions.http('googleAdsWorker', async (req, res) => {
             severity: 'CRITICAL',
             error: ackError.message,
             stack: ackError.stack,
-          })
+          }),
         );
       }
     }
