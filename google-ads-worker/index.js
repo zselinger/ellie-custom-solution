@@ -1,6 +1,6 @@
-const functions = require("@google-cloud/functions-framework");
-const { SubscriberClient } = require("@google-cloud/pubsub").v1;
-const { uploadClickConversion } = require("./googleAdsClient");
+const functions = require('@google-cloud/functions-framework');
+const { SubscriberClient } = require('@google-cloud/pubsub').v1;
+const { uploadClickConversion } = require('./googleAdsClient');
 
 const subscriberClient = new SubscriberClient();
 const MAX_MESSAGES = 50;
@@ -13,11 +13,11 @@ const MAX_MESSAGES = 50;
  * @param {object} req The request object.
  * @param {object} res The response object.
  */
-functions.http("googleAdsWorker", async (req, res) => {
+functions.http('googleAdsWorker', async (req, res) => {
   console.log(
     JSON.stringify({
-      message: "google-ads-worker execution started.",
-      severity: "INFO",
+      message: 'google-ads-worker execution started.',
+      severity: 'INFO',
       payload: req.body,
     })
   );
@@ -29,11 +29,11 @@ functions.http("googleAdsWorker", async (req, res) => {
     console.error(
       JSON.stringify({
         message:
-          "PUBSUB_SUBSCRIPTION_ID or GCP_PROJECT_ID environment variables not set.",
-        severity: "CRITICAL",
+          'PUBSUB_SUBSCRIPTION_ID or GCP_PROJECT_ID environment variables not set.',
+        severity: 'CRITICAL',
       })
     );
-    res.status(500).send("Server configuration error.");
+    res.status(500).send('Server configuration error.');
     return;
   }
 
@@ -55,11 +55,11 @@ functions.http("googleAdsWorker", async (req, res) => {
     if (messages.length === 0) {
       console.log(
         JSON.stringify({
-          message: "No messages to process.",
-          severity: "INFO",
+          message: 'No messages to process.',
+          severity: 'INFO',
         })
       );
-      res.status(200).send("No messages to process.");
+      res.status(200).send('No messages to process.');
       return;
     }
 
@@ -75,8 +75,8 @@ functions.http("googleAdsWorker", async (req, res) => {
       if (!conversion_actions || !gclid) {
         console.error(
           JSON.stringify({
-            message: "Invalid message format received.",
-            severity: "ERROR",
+            message: 'Invalid message format received.',
+            severity: 'ERROR',
             payload: messageData,
           })
         );
@@ -119,16 +119,16 @@ functions.http("googleAdsWorker", async (req, res) => {
 
     console.log(
       JSON.stringify({
-        message: "google-ads-worker batch processing finished.",
-        severity: "INFO",
+        message: 'google-ads-worker batch processing finished.',
+        severity: 'INFO',
       })
     );
-    res.status(200).send("Batch processing complete.");
+    res.status(200).send('Batch processing complete.');
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "google-ads-worker execution failed during API call.",
-        severity: "ERROR",
+        message: 'google-ads-worker execution failed during API call.',
+        severity: 'ERROR',
         error: error.message,
         stack: error.stack,
       })
@@ -136,7 +136,7 @@ functions.http("googleAdsWorker", async (req, res) => {
 
     const errorMessage = error.response?.data
       ? JSON.stringify(error.response.data, null, 2)
-      : "An error occurred during processing.";
+      : 'An error occurred during processing.';
     const errorStatus = error.response?.status || 500;
 
     res.status(errorStatus).send(errorMessage);
@@ -156,8 +156,8 @@ functions.http("googleAdsWorker", async (req, res) => {
       } catch (ackError) {
         console.error(
           JSON.stringify({
-            message: "Failed to acknowledge Pub/Sub messages.",
-            severity: "CRITICAL",
+            message: 'Failed to acknowledge Pub/Sub messages.',
+            severity: 'CRITICAL',
             error: ackError.message,
             stack: ackError.stack,
           })

@@ -1,14 +1,14 @@
-require("dotenv").config({ path: "../.env" });
-const functions = require("@google-cloud/functions-framework");
-const { BigQuery } = require("@google-cloud/bigquery");
-const { PubSub } = require("@google-cloud/pubsub");
+require('dotenv').config({ path: '../.env' });
+const functions = require('@google-cloud/functions-framework');
+const { BigQuery } = require('@google-cloud/bigquery');
+const { PubSub } = require('@google-cloud/pubsub');
 
 const projectId = process.env.GCP_PROJECT_ID;
 
 const bigquery = new BigQuery({ projectId });
 const pubsub = new PubSub({ projectId });
 
-const TOPIC_NAME = process.env.PUBSUB_TOPIC_ID || "process-gclid";
+const TOPIC_NAME = process.env.PUBSUB_TOPIC_ID || 'process-gclid';
 
 /**
  * HTTP Cloud Function.
@@ -17,22 +17,22 @@ const TOPIC_NAME = process.env.PUBSUB_TOPIC_ID || "process-gclid";
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-functions.http("amplitudeController", async (req, res) => {
+functions.http('amplitudeController', async (req, res) => {
   console.log(
     JSON.stringify({
-      message: "amplitude-controller execution started.",
-      severity: "INFO",
+      message: 'amplitude-controller execution started.',
+      severity: 'INFO',
     })
   );
 
-  if (req.method !== "POST") {
+  if (req.method !== 'POST') {
     console.error(
       JSON.stringify({
-        message: "Method Not Allowed",
-        severity: "ERROR",
+        message: 'Method Not Allowed',
+        severity: 'ERROR',
       })
     );
-    return res.status(405).send("Method Not Allowed");
+    return res.status(405).send('Method Not Allowed');
   }
 
   const { event_type, event_properties, user_properties } = req.body;
@@ -44,12 +44,12 @@ functions.http("amplitudeController", async (req, res) => {
     console.error(
       JSON.stringify({
         message:
-          "Missing gclid in request body (checked both event_properties and user_properties)",
-        severity: "ERROR",
+          'Missing gclid in request body (checked both event_properties and user_properties)',
+        severity: 'ERROR',
         body: req.body,
       })
     );
-    return res.status(400).send("Missing gclid in request body");
+    return res.status(400).send('Missing gclid in request body');
   }
 
   try {
@@ -58,7 +58,7 @@ functions.http("amplitudeController", async (req, res) => {
 
     if (!projectId || !datasetId || !tableId) {
       throw new Error(
-        "Missing required environment variables for BigQuery connection."
+        'Missing required environment variables for BigQuery connection.'
       );
     }
     // 2. Query BigQuery for settings
@@ -71,7 +71,7 @@ functions.http("amplitudeController", async (req, res) => {
       console.log(
         JSON.stringify({
           message: logMessage,
-          severity: "INFO",
+          severity: 'INFO',
           event_type,
         })
       );
@@ -95,7 +95,7 @@ functions.http("amplitudeController", async (req, res) => {
     console.log(
       JSON.stringify({
         message: `Message ${messageId} published to topic ${TOPIC_NAME}.`,
-        severity: "INFO",
+        severity: 'INFO',
         messageId,
         topic: TOPIC_NAME,
         gclid: gclid,
@@ -107,13 +107,13 @@ functions.http("amplitudeController", async (req, res) => {
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "amplitude-controller execution failed.",
-        severity: "ERROR",
+        message: 'amplitude-controller execution failed.',
+        severity: 'ERROR',
         error: error.message,
         stack: error.stack,
         event_type: event_type,
       })
     );
-    res.status(500).send("Internal Server Error");
+    res.status(500).send('Internal Server Error');
   }
 });
