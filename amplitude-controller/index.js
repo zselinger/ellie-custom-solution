@@ -25,6 +25,14 @@ functions.http('amplitudeController', async (req, res) => {
     }),
   );
 
+  console.log(
+    JSON.stringify({
+      message: 'Incoming payload',
+      severity: 'INFO',
+      body: req.body,
+    }),
+  );
+
   if (req.method !== 'POST') {
     console.error(
       JSON.stringify({
